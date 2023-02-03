@@ -571,7 +571,7 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
 
     fprintf(
         f, 
-        "        printf(\"We don't know what to want to do!\\nType the option number to choose it.\\n\");\n"
+        "        printf(\"We don't know what you want to do!\\nType the option number to choose it.\\n\");\n"
         "        goto ask_again;\n" 
         "\n"        
         "        next: continue;\n"
@@ -653,7 +653,7 @@ void run_story(Story* story) {
         }
         
         dont_know:
-        printf("We don't know what to want to do!\nType the option number to choose it.\n"); // todo: hardcoded
+        printf("We don't know what you want to do!\nType the option number to choose it.\n"); // todo: hardcoded
         goto ask_again; 
         
         next: continue;
