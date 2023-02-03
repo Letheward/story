@@ -1,2 +1,11 @@
-cd src && gcc -Wall -Wextra -std=c99 -pedantic main.c -o ../bin/story &&
-cd ../bin && ./story run "data/test.story"
+# Windows + MinGW
+name="story"
+src="src/main.c"
+opt="-O0"
+etc="-std=c99 -pedantic -Wall -Wextra"
+
+# build
+gcc $src -o bin/$name &&
+
+# run
+cd bin && ./$name run "data/test.story" && cd ..
