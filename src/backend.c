@@ -367,6 +367,16 @@ void parse_file_to_story(String file, Story* story) {
     }
 }
 
+
+// for outputting valid C99 identifiers (because a scene label string is in utf-8)
+// todo: maybe this is too long? use compressed base62 or something?
+void file_print_string_as_byte_literal_identifier(FILE* f, String s) {
+    fprintf(f, "identifier_");
+    for (u64 i = 0; i < s.count; i++) {
+        fprintf(f, "%x", s.data[i]);
+    }
+}
+
 u8 export_story_as_c_code(Story* story, char* file_name) {
     
     HashTable*     table      = &story->scene_table;
@@ -414,7 +424,7 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
     
     fprintf(f, "enum {\n");
     for (u64 i = 0; i < lang_table->count; i++) {
-        file_print(f, string("    @,\n"), lang_table->data[i]);
+        file_print(f, string("    @,\n"), lang_table->data[i]); // todo: is it better to also byte literal this?
     }
     fprintf(f, "};\n\n");
 
@@ -424,7 +434,9 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
         HashTableEntry* entry = &table->entries[i];
         if (!entry->occupied) continue;
         
-        file_print(f, string("    @,\n"), entry->key);
+        fprintf(f, "    ");
+        file_print_string_as_byte_literal_identifier(f, entry->key);
+        fprintf(f, ",\n");
     }
     fprintf(f, "};\n\n");
 
@@ -441,7 +453,9 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
         if (!entry->occupied) continue;
         if (i == quit_index)  continue;
         
-        file_print(f, string("    [@] = {\n"), entry->key);
+        fprintf(f, "    [");
+        file_print_string_as_byte_literal_identifier(f, entry->key);
+        fprintf(f, "] = {\n");
         
         file_print(f, string("        {\n"));
         Scene* scene = &entry->value;
@@ -458,7 +472,9 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
             Option* option = &scene->options[j];
 
             file_print(f, string("            {\n"));
-            file_print(f, string("                @,\n"), option->link);
+            fprintf(f, "                ");
+            file_print_string_as_byte_literal_identifier(f, option->link);
+            fprintf(f, ",\n");
             
             file_print(f, string("                {\n"));
             for (u64 k = 0; k < lang_table->count; k++) {
@@ -479,75 +495,86 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
     }
     fprintf(f, "};\n\n");
 
-    file_print(
+    fprintf(
         f, 
-        string(
-            "int main() {\n"
-            "\n"    
-            "    setvbuf(stdout, NULL, _IONBF, 0);\n"
-            "\n"
-            "    int  language = 0;\n"
-            "    int  current_scene_index = @;\n"
-            "    char input[256];\n"
-            "\n"
-            "    while (1) {\n"
-            "\n"        
-            "        if (current_scene_index == @) break;\n"
-            "\n"
-            "        Scene* scene = &scenes[current_scene_index];\n"
-            "        print_scene(scene, language);\n"
-            "\n"        
-            "        ask_again:\n"
-            "        printf(\"> \");\n"
-            "        fgets(input, sizeof(input), stdin);\n"
-            "\n"
-            "        if (strstr(input, \"quit\")  || strstr(input, \"exit\"))  break;\n"
-            "        if (strstr(input, \"scene\") || strstr(input, \"print\")) continue;\n"
-            "\n"        
-            "        if (strstr(input, \"lang\")) {\n"
-        ),
-        start, quit
+        "int main() {\n"
+        "\n"    
+        "    setvbuf(stdout, NULL, _IONBF, 0);\n"
+        "\n"
+        "    int  language = 0;\n"
+        "    int  current_scene_index = "
     );
 
-    fprintf(f, "             const char* langs[] = {\n");
-    for (u64 i = 0; i < lang_table->count; i++) {
-        String lang = lang_table->data[i];
-        file_print(f, string("                 [@] = \"@\",\n"), lang, lang);
-    }
-    fprintf(f, "             };\n");
+    file_print_string_as_byte_literal_identifier(f, start);
 
     fprintf(
         f, 
-        "             for (int i = 0; i < %llu; i++) {\n"
-        "                 if (strstr(input, langs[i])) {\n"
-        "                     language = i;\n"
-        "                     goto next;\n"
-        "                 }\n"
-        "             }\n"
-        "             goto ask_again;\n"
-        "         }\n\n",
+        ";\n"
+        "    char input[256];\n"
+        "\n"
+        "    while (1) {\n"
+        "\n"        
+        "        if (current_scene_index == "
+    );
+    
+    file_print_string_as_byte_literal_identifier(f, quit);
+    
+    fprintf(
+        f,
+        ") break;\n"
+        "\n"
+        "        Scene* scene = &scenes[current_scene_index];\n"
+        "        print_scene(scene, language);\n"
+        "\n"        
+        "        ask_again:\n"
+        "        printf(\"> \");\n"
+        "        fgets(input, sizeof(input), stdin);\n"
+        "\n"
+        "        if (strstr(input, \"quit\")  || strstr(input, \"exit\"))  break;\n"
+        "        if (strstr(input, \"scene\") || strstr(input, \"print\")) continue;\n"
+        "\n"        
+        "        if (strstr(input, \"lang\")) {\n"
+    );
+
+    fprintf(f, "            const char* langs[] = {\n");
+    for (u64 i = 0; i < lang_table->count; i++) {
+        String lang = lang_table->data[i];
+        file_print(f, string("                [@] = \"@\",\n"), lang, lang);
+    }
+    fprintf(f, "            };\n");
+
+    fprintf(
+        f, 
+        "            for (int i = 0; i < %llu; i++) {\n"
+        "                if (strstr(input, langs[i])) {\n"
+        "                    language = i;\n"
+        "                    goto next;\n"
+        "                }\n"
+        "            }\n"
+        "            goto ask_again;\n"
+        "        }\n\n",
         lang_table->count
     );
 
     fprintf(
         f, 
-        "         {\n"
-        "             const char* nums[] = {\"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\"};\n"
-        "             for (int i = 0; i < scene->choice_count; i++) {\n"
-        "                 if (strstr(input, nums[i])) {\n"
-        "                     current_scene_index = scene->choices[i].link;\n"
-        "                     goto next;\n"
-        "                 }\n"
-        "             }\n"
-        "         }\n\n"
+        "        {\n"
+        "            const char* nums[] = {\"1\", \"2\", \"3\", \"4\", \"5\", \"6\", \"7\", \"8\"};\n"
+        "            for (int i = 0; i < scene->choice_count; i++) {\n"
+        "                if (strstr(input, nums[i])) {\n"
+        "                    current_scene_index = scene->choices[i].link;\n"
+        "                    goto next;\n"
+        "                }\n"
+        "            }\n"
+        "        }\n\n"
     );
 
     fprintf(
         f, 
-        "         printf(\"We don't know what to want to do!\\nType the option number to choose it.\\n\");\n"
-        "         goto ask_again;\n" 
+        "        printf(\"We don't know what to want to do!\\nType the option number to choose it.\\n\");\n"
+        "        goto ask_again;\n" 
         "\n"        
-        "         next: continue;\n"
+        "        next: continue;\n"
         "    }\n"
         "}\n"
     );
