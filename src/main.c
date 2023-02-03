@@ -25,61 +25,46 @@ int main(int arg_count, char** args) {
         context.temp_buffer.size = size;
         context.alloc = malloc;
 
-        context.input_buffer      = (String) { calloc(8192, sizeof(u8)), 8192 }; 
-        context.command_line_args = (Array(String)) { malloc(sizeof(String) * arg_count), arg_count };
-
-        for (int i = 0; i < arg_count; i++) {
-            context.command_line_args.data[i] = (String) {(u8*) args[i], strlen(args[i])};
-        }
+        context.input_buffer = (String) { calloc(8192, sizeof(u8)), 8192 }; 
         
         setvbuf(stdout, NULL, _IONBF, 0); // force some shell to print immediately (so stdout before input will not be hidden) 
     }
 
-    if (arg_count < 3) {
-        hard_error(
-            "Unknown Command!\n"
-            "Example Usage:\n"
-            "story run foo.story\n"
-            "story export foo.story foo.c\n"
-        );
-    }
+    char* unknown_error_string = 
+        "Unknown Command!\n"
+        "Example Usages:\n"
+        "story run    foo.story\n"
+        "story export foo.story foo.c\n"
+    ;
 
-    if (strcmp(args[1], "run") == 0) {
-        
-        String file = load_file(args[2]);
-        if (!file.count) hard_error("Please open a valid file!\n");
+    if (arg_count < 3) hard_error(unknown_error_string);
 
-        String lang_table_buffer[16];
-        Story story = {
-            .scene_table = table_init(256, 0.7, get_hash_fnv1a),
-            .lang_table = { 
-                .data      = lang_table_buffer, 
-                .allocated = count_of(lang_table_buffer) 
-            },
-        };
-        
-        parse_file_to_story(file, &story);
+    u8 is_run    = strcmp(args[1], "run")    == 0;
+    u8 is_export = strcmp(args[1], "export") == 0;
+
+    if (!is_run   && !is_export)    hard_error(unknown_error_string);
+    if (is_export && arg_count < 4) hard_error("Missing output filename for \"%s\"\n", args[2]);
+
+    String file = load_file(args[2]);
+    if (!file.count) hard_error("Cannot open file \"%s\"\n", args[2]);
+
+    String lang_table_buffer[max_language_count];
+    Story story = {
+        .scene_table = table_init(256, 0.7, get_hash_fnv1a),
+        .lang_table = { 
+            .data      = lang_table_buffer, 
+            .allocated = count_of(lang_table_buffer) 
+        },
+    };
+    
+    parse_file_to_story(file, &story);
+
+    if (is_run) {
         run_story(&story);
-    }
-
-    if (strcmp(args[1], "export") == 0) {
-        
-        if (arg_count < 4) hard_error("Invalid export command! Maybe you miss the output filename?\n");
-
-        String file = load_file(args[2]);
-        if (!file.count) hard_error("Please open a valid file!\n");
-
-        String lang_table_buffer[16];
-        Story story = {
-            .scene_table = table_init(256, 0.7, get_hash_fnv1a),
-            .lang_table = { 
-                .data      = lang_table_buffer, 
-                .allocated = count_of(lang_table_buffer) 
-            },
-        };
-        
-        parse_file_to_story(file, &story);
+    } else if (is_export) {
         u8 ok = export_story_as_c_code(&story, args[3]);
-        if (!ok) hard_error("Cannot export %s to %s\n", args[2], args[3]);
+        if (!ok) hard_error("Cannot export \"%s\" to \"%s\"\n", args[2], args[3]);
     }
+    
+    // we let the OS clean up all the memory
 }

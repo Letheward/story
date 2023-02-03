@@ -146,14 +146,6 @@ HashTableEntry* table_get_entry(HashTable* table, String key) {
     return &table->entries[index];
 }
 
-// todo: better error passing
-Scene table_get_value(HashTable* table, String key) {
-    u64 index;
-    u8 ok = table_get_index(table, key, &index);
-    if (!ok) return (Scene) {0};
-    return table->entries[index].value;
-}
-
 
 
 

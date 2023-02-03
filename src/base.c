@@ -49,10 +49,9 @@ typedef struct {
 } ArenaBuffer;
 
 typedef struct {
-    ArenaBuffer   temp_buffer;
-    String        input_buffer;
-    void*         (*alloc)(u64);
-    Array(String) command_line_args;
+    ArenaBuffer temp_buffer;
+    String      input_buffer;
+    void*       (*alloc)(u64);
 } Context;
 
 Context context;

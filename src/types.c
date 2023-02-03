@@ -1,6 +1,6 @@
-#define max_language_count 8
-
 // make these dynamic?
+
+#define max_language_count 8
 
 typedef struct {
     String link;

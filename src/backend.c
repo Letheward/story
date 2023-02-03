@@ -100,11 +100,6 @@ void parse_file_to_story(String file, Story* story) {
 
     HashTable*     table      = &story->scene_table;
     LanguageTable* lang_table = &story->lang_table;
-    String* start_label_out   = &story->start_label;
-    String* quit_label_out    = &story->quit_label;
-
-    *start_label_out = (String) {0};
-    *quit_label_out  = (String) {0};
 
     String walk = file;
     u64 line_count = 0;
@@ -149,7 +144,7 @@ void parse_file_to_story(String file, Story* story) {
                 hard_error("Invalid start label at %llu\n", line_count);
             }
 
-            *start_label_out = string_strip_label(label);
+            story->start_label = string_strip_label(label);
 
             has_start = 1;
         }
@@ -163,7 +158,7 @@ void parse_file_to_story(String file, Story* story) {
 
             label = string_strip_label(label);
 
-            *quit_label_out = label;
+            story->quit_label = label;
             
             table_put(table, label, (Scene) {0}); // todo: this waste a slot
             has_quit = 1;
@@ -178,9 +173,8 @@ void parse_file_to_story(String file, Story* story) {
 
 
 
-    /* ---- First Pass Labels ---- */
+    /* ---- first pass to put all labels into the hash table ---- */
     
-    // first pass
     for (String t = file; t.count;) {
 
         String line = string_eat_line(&t);
@@ -192,7 +186,7 @@ void parse_file_to_story(String file, Story* story) {
         table_put(table, string_strip_label(label), (Scene) {0});
     }
 
-    if (!table_get_entry(table, *start_label_out)) {
+    if (!table_get_entry(table, story->start_label)) {
         hard_error("This file does not contain the correct start label specified in the header.\n");
     }
 
@@ -381,8 +375,6 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
     
     HashTable*     table      = &story->scene_table;
     LanguageTable* lang_table = &story->lang_table;
-    String start = story->start_label;
-    String quit  = story->quit_label;
     
     FILE* f = fopen(file_name, "wb");
     if (!f) return 0;
@@ -442,7 +434,7 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
 
     u64 quit_index = 0;
     {
-        u8 ok = table_get_index(table, quit, &quit_index);
+        u8 ok = table_get_index(table, story->quit_label, &quit_index);
         assert(ok);
     }
 
@@ -505,7 +497,7 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
         "    int  current_scene_index = "
     );
 
-    file_print_string_as_byte_literal_identifier(f, start);
+    file_print_string_as_byte_literal_identifier(f, story->start_label);
 
     fprintf(
         f, 
@@ -517,7 +509,7 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
         "        if (current_scene_index == "
     );
     
-    file_print_string_as_byte_literal_identifier(f, quit);
+    file_print_string_as_byte_literal_identifier(f, story->quit_label);
     
     fprintf(
         f,
@@ -634,29 +626,82 @@ void run_story(Story* story) {
         if (string_equal(line, string("quit"))  || string_equal(line, string("exit")))  break;
         if (string_equal(line, string("scene")) || string_equal(line, string("print"))) continue;
         
-        if (string_starts_with(line, string("lang"))) {
-            
-            String lang = string_trim_spaces(string_advance(line, 4));
+        String command = string_eat_by_spaces(&line);
+
+        if (string_equal(command, string("help"))) {
+
+            printf(
+                "=======================\n"
+                "How to use this program:\n"
+                "\n"
+                "    Choose an option:\n"
+                "\n"
+                "    Do it?\n"
+                "    [1] yes\n"
+                "    [2] no\n"
+                "    > 1\n"
+                "    \n"
+                "    Change Language:\n"
+                "    > lang en_us\n"
+                "    \n"
+                "    Print Current Scene:\n"
+                "    > scene\n"
+                "    \n"
+                "    Quit Game:\n"
+                "    > quit\n"
+                "=======================\n"
+            );
+
+            goto ask_again;
+        
+        } else if (string_equal(command, string("language")) || string_equal(command, string("lang"))) {
+
+            String lang = string_trim_spaces(line);
+            if (!line.count) {
+                printf("Available languages:\n");
+                for (u64 i = 0; i < lang_table->count; i++) {
+                    print(string("@\n"), lang_table->data[i]);
+                }
+                goto ask_again;
+            }
             
             u64 index;
-            if (!language_table_get_index(lang_table, lang, &index)) goto dont_know;
+            if (!language_table_get_index(lang_table, line, &index)) {
+                
+                print(string("Unknown language \"@\".\n"), line);
+                printf("Available languages:\n");
+                for (u64 i = 0; i < lang_table->count; i++) {
+                    print(string("@\n"), lang_table->data[i]);
+                }
+
+                goto ask_again;
+            }
             
             language = index;
-            goto next;
+        
+        } else {
+            
+            u64 option_index = 0;
+            if (parse_u64(command, &option_index)) {
+                
+                if (line.count) {
+                    printf("You can only choose 1 option! Type only 1 option number to choose it.\n");
+                    goto ask_again;
+                }
+            
+                if (option_index < 1 || option_index > scene->option_count) {
+                    print(string("There is no option @!\n"), command);
+                    goto ask_again;
+                }
+
+                current_scene_label = scene->options[option_index - 1].link;
+            
+            } else {
+        
+                print(string("Unknown Command \"@\".\nType the option number to choose it. Type \"help\" for more information.\n"), command); // todo: hardcoded
+                goto ask_again; 
+            }
         }
-        
-        u64 option_index = 0;
-        if (parse_u64(line, &option_index)) {
-            if (option_index < 1 || option_index > scene->option_count) goto dont_know;
-            current_scene_label = scene->options[option_index - 1].link;
-            goto next;
-        }
-        
-        dont_know:
-        printf("We don't know what you want to do!\nType the option number to choose it.\n"); // todo: hardcoded
-        goto ask_again; 
-        
-        next: continue;
     }
 }
 

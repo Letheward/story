@@ -585,9 +585,6 @@ void file_print_quoted_string(FILE* f, String s) {
     fputc('"', f);
 }
 
-
-
-
 // note: does not give a copy
 String read_line() {
     
