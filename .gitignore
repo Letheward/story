@@ -1,3 +1,4 @@
 *.exe
 *.story
+*.twee
 bin/*.c

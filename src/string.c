@@ -3,6 +3,10 @@
 
 /* ---- Basic ---- */
 
+String c_string_to_string(char* s) {
+    return (String) { (u8*) s, (u64) strlen(s) }; 
+}
+
 // note: not safe, use with caution
 String string_advance(String s, u64 pos) {
     return (String) {s.data + pos, s.count - pos};

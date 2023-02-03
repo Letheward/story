@@ -73,6 +73,39 @@ void print_graphviz_dot_file(HashTable* table) {
 
 
 
+
+/* ==== Language Table ==== */
+
+// just a simple max count dynamic array
+
+typedef struct {
+    String data[max_language_count];
+    u64    count;
+} LanguageTable;
+
+void language_table_add(LanguageTable* table, String s) {
+    u64 wanted = table->count + 1;
+    assert(wanted < max_language_count);
+    table->data[table->count] = s;
+    table->count = wanted;
+}
+
+// linear search
+u8 language_table_get_index(LanguageTable* table, String s, u64* index_out) {
+    *index_out = 0;
+    for (u64 i = 0; i < table->count; i++) {
+        if (string_equal(s, table->data[i])) {
+            *index_out = i;
+            return 1;
+        }
+    }
+    return 0; 
+}
+
+
+
+
+
 /* ==== Story ==== */
 
 typedef struct {
@@ -96,11 +129,23 @@ String string_strip_label(String s) {
     return string_view(s, 1, s.count - 1);
 }
 
-void parse_file_to_story(String file, Story* story) {
+// todo: make this return error code instead of hard exiting?
+void parse_file_to_story(char* file_name, Story* story) {
+    
+
+    /* ---- Load file and init hash table ---- */ 
+    
+    String file = load_file(file_name);
+    if (!file.count) hard_error("Cannot open file \"%s\"\n", file_name);
+    
+    story->scene_table = table_init(256, 0.7, get_hash_fnv1a);
+
+
+    /* ---- Init ---- */ 
 
     HashTable*     table      = &story->scene_table;
     LanguageTable* lang_table = &story->lang_table;
-
+    
     String walk = file;
     u64 line_count = 0;
 
@@ -167,9 +212,9 @@ void parse_file_to_story(String file, Story* story) {
         if (has_language && has_start && has_quit) break;
     }
    
-    if (!has_language) hard_error("This file does not contain a language list!\n");
-    if (!has_start)    hard_error("This file does not contain a start label!\n");
-    if (!has_quit)     hard_error("This file does not contain a quit label!\n");
+    if (!has_language) hard_error("File \"%s\" does not contain a language list!\n", file_name);
+    if (!has_start)    hard_error("File \"%s\" does not contain a start label!\n", file_name);
+    if (!has_quit)     hard_error("File \"%s\" does not contain a quit label!\n", file_name);
 
 
 
@@ -187,7 +232,7 @@ void parse_file_to_story(String file, Story* story) {
     }
 
     if (!table_get_entry(table, story->start_label)) {
-        hard_error("This file does not contain the correct start label specified in the header.\n");
+        hard_error("File \"%s\" does not contain the correct start label specified in the header.\n", file_name);
     }
 
 
@@ -361,7 +406,6 @@ void parse_file_to_story(String file, Story* story) {
     }
 }
 
-
 // for outputting valid C99 identifiers (because a scene label string is in utf-8)
 // todo: maybe this is too long? use compressed base62 or something?
 void file_print_string_as_byte_literal_identifier(FILE* f, String s) {
@@ -369,6 +413,41 @@ void file_print_string_as_byte_literal_identifier(FILE* f, String s) {
     for (u64 i = 0; i < s.count; i++) {
         fprintf(f, "%x", s.data[i]);
     }
+}
+
+// The .twee format for Twine 
+// todo: Twine doesn't like '_' for label identifier
+// todo: figure out start and quit label
+u8 export_story_as_twee(Story* story, u64 language, char* file_name) {
+
+    HashTable*     table      = &story->scene_table;
+    LanguageTable* lang_table = &story->lang_table;
+
+    FILE* f = fopen(file_name, "wb");
+    if (!f) return 0;
+    
+    for (u64 i = 0; i < table->size; i++) {
+        
+        HashTableEntry* entry = &table->entries[i];
+        if (!entry->occupied) continue;
+        
+        Scene* scene = &entry->value;
+
+        file_print(f, string(":: @\n"), entry->key);
+        file_print(f, string("@\n"), scene->text[language]);
+        
+        for (u64 j = 0; j < scene->option_count; j++) {
+            Option* option = &scene->options[j];
+            file_print(f, string("[[@->@]]\n"), option->text[language], option->link);
+        }
+        
+        fprintf(f, "\n");
+    }
+
+    fflush(f);
+    fclose(f);
+
+    return 1;
 }
 
 u8 export_story_as_c_code(Story* story, char* file_name) {
