@@ -65,8 +65,10 @@ int main(int arg_count, char** args) {
         Story story = {0};
         parse_file_to_story(input, &story);
         
-        u8 ok = export_story_as_c_code(&story, output);
+        u8 ok = export_story_to_c_code(&story, output);
         if (!ok) hard_error("Cannot export \"%s\" to \"%s\".\n", input, output);
+
+        printf("Exported \"%s\" to \"%s\".\n", input, output);
     
     } else if (strcmp(command, "export-twee") == 0) {
     
@@ -86,12 +88,26 @@ int main(int arg_count, char** args) {
             hard_error("The file \"%s\" does not contain language \"%s\".", input, language); 
         }
        
-        u8 ok = export_story_as_twee(&story, language_index, output);
+        u8 ok = export_story_to_twee(&story, language_index, output);
         if (!ok) hard_error("Cannot export \"%s\" to \"%s\".\n", input, output);
+        
+        printf("Exported \"%s\" to \"%s\".\n", input, output);
     
     } else if (strcmp(command, "export-graph") == 0) {
         
-        // todo
+        if (arg_count < 3) hard_error("Missing input filename.\n");
+        if (arg_count < 4) hard_error("Missing output filename for \"%s\".\n", args[2]);
+        
+        char* input    = args[2];
+        char* output   = args[3];
+        
+        Story story = {0};
+        parse_file_to_story(input, &story);
+        
+        u8 ok = export_story_to_graphviz_dot_file(&story, output);
+        if (!ok) hard_error("Cannot export \"%s\" to \"%s\".\n", input, output);
+        
+        printf("Exported \"%s\" to \"%s\".\n", input, output);
         
     } else {
     

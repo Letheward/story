@@ -52,25 +52,6 @@ void print_table(HashTable table) {
     printf("\n");
 }
 
-void print_graphviz_dot_file(HashTable* table) {
-    
-    printf("digraph {\n");
-    
-    for (u64 i = 0; i < table->size; i++) {
-        
-        HashTableEntry* entry = &table->entries[i];
-        if (!entry->occupied) continue;
-        
-        Scene* scene = &entry->value;
-        for (u64 i = 0; i < scene->option_count; i++) {
-            print(string("    \"@\" -> \"@\";\n"), entry->key, scene->options[i].link);
-        }
-    }
-    
-    printf("}\n");
-}
-
-
 
 
 
@@ -117,7 +98,7 @@ typedef struct {
 
 
 
-/* ---- Parsing and Export ---- */
+/* ---- Parsing ---- */
 
 u8 string_is_label(String s) {
     if (s.count < 2) return 0;
@@ -406,6 +387,141 @@ void parse_file_to_story(char* file_name, Story* story) {
     }
 }
 
+
+
+
+/* ---- Running (terminal mode) ---- */
+
+void print_scene(Scene* scene, u64 language) {
+    
+    const String missing = string("{missing string}");
+    
+    String text = scene->text[language];
+    if (!text.count) text = missing;
+    print(string("@\n"), text);
+    
+    for (u64 i = 0; i < scene->option_count; i++) {
+        
+        printf("[%llu] ", i + 1);
+        
+        String text = scene->options[i].text[language];
+        if (!text.count) text = missing;
+        print(string("@\n"), text);
+    }
+}
+
+void run_story(Story* story) {
+    
+    HashTable*     table       = &story->scene_table;
+    LanguageTable* lang_table  = &story->lang_table;
+    String current_scene_label = story->start_label;
+    String quit_label          = story->quit_label;
+    
+    u64 language = 0; 
+    
+    while (1) {
+        
+        if (string_equal(current_scene_label, quit_label)) break;
+
+        HashTableEntry* entry = table_get_entry(table, current_scene_label);
+        assert(entry != NULL);
+        
+        Scene* scene = &entry->value;
+        print_scene(scene, language);
+        
+        ask_again:
+        printf("> ");
+
+        String line = string_trim_spaces(read_line());
+
+        if (string_equal(line, string("quit"))  || string_equal(line, string("exit")))  break;
+        if (string_equal(line, string("scene")) || string_equal(line, string("print"))) continue;
+        
+        String command = string_eat_by_spaces(&line);
+
+        if (string_equal(command, string("help"))) {
+
+            printf(
+                "=======================\n"
+                "How to use this program:\n"
+                "\n"
+                "    Choose an option:\n"
+                "\n"
+                "    Do it?\n"
+                "    [1] yes\n"
+                "    [2] no\n"
+                "    > 1\n"
+                "    \n"
+                "    Change Language:\n"
+                "    > lang en_us\n"
+                "    \n"
+                "    Print Current Scene:\n"
+                "    > scene\n"
+                "    \n"
+                "    Quit Game:\n"
+                "    > quit\n"
+                "=======================\n"
+            );
+
+            goto ask_again;
+        
+        } else if (string_equal(command, string("language")) || string_equal(command, string("lang"))) {
+
+            String lang = string_trim_spaces(line);
+            if (!line.count) {
+                printf("Available languages:\n");
+                for (u64 i = 0; i < lang_table->count; i++) {
+                    print(string("@\n"), lang_table->data[i]);
+                }
+                goto ask_again;
+            }
+            
+            u64 index;
+            if (!language_table_get_index(lang_table, line, &index)) {
+                
+                print(string("Unknown language \"@\".\n"), line);
+                printf("Available languages:\n");
+                for (u64 i = 0; i < lang_table->count; i++) {
+                    print(string("@\n"), lang_table->data[i]);
+                }
+
+                goto ask_again;
+            }
+            
+            language = index;
+        
+        } else {
+            
+            u64 option_index = 0;
+            if (parse_u64(command, &option_index)) {
+                
+                if (line.count) {
+                    printf("You can only choose 1 option! Type only 1 option number to choose it.\n");
+                    goto ask_again;
+                }
+            
+                if (option_index < 1 || option_index > scene->option_count) {
+                    print(string("There is no option @!\n"), command);
+                    goto ask_again;
+                }
+
+                current_scene_label = scene->options[option_index - 1].link;
+            
+            } else {
+        
+                print(string("Unknown Command \"@\".\nType the option number to choose it. Type \"help\" for more information.\n"), command); // todo: hardcoded
+                goto ask_again; 
+            }
+        }
+    }
+}
+
+
+
+
+
+/* ---- Export ---- */
+
 // for outputting valid C99 identifiers (because a scene label string is in utf-8)
 // todo: maybe this is too long? use compressed base62 or something?
 void file_print_string_as_byte_literal_identifier(FILE* f, String s) {
@@ -415,10 +531,38 @@ void file_print_string_as_byte_literal_identifier(FILE* f, String s) {
     }
 }
 
+u8 export_story_to_graphviz_dot_file(Story* story, char* file_name) {
+    
+    FILE* f = fopen(file_name, "wb");
+    if (!f) return 0;
+    
+    HashTable* table = &story->scene_table;
+
+    fprintf(f, "digraph {\n");
+    
+    for (u64 i = 0; i < table->size; i++) {
+        
+        HashTableEntry* entry = &table->entries[i];
+        if (!entry->occupied) continue;
+        
+        Scene* scene = &entry->value;
+        for (u64 i = 0; i < scene->option_count; i++) {
+            file_print(f, string("    \"@\" -> \"@\";\n"), entry->key, scene->options[i].link);
+        }
+    }
+    
+    fprintf(f, "}\n");
+    
+    fflush(f);
+    fclose(f);
+    
+    return 1;
+}
+
 // The .twee format for Twine 
 // todo: Twine doesn't like '_' for label identifier
 // todo: figure out start and quit label
-u8 export_story_as_twee(Story* story, u64 language, char* file_name) {
+u8 export_story_to_twee(Story* story, u64 language, char* file_name) {
 
     HashTable*     table      = &story->scene_table;
     LanguageTable* lang_table = &story->lang_table;
@@ -450,7 +594,7 @@ u8 export_story_as_twee(Story* story, u64 language, char* file_name) {
     return 1;
 }
 
-u8 export_story_as_c_code(Story* story, char* file_name) {
+u8 export_story_to_c_code(Story* story, char* file_name) {
     
     HashTable*     table      = &story->scene_table;
     LanguageTable* lang_table = &story->lang_table;
@@ -654,133 +798,5 @@ u8 export_story_as_c_code(Story* story, char* file_name) {
     fclose(f);
     
     return 1;
-}
-
-
-
-/* ---- Running (terminal mode) ---- */
-
-void print_scene(Scene* scene, u64 language) {
-    
-    const String missing = string("{missing string}");
-    
-    String text = scene->text[language];
-    if (!text.count) text = missing;
-    print(string("@\n"), text);
-    
-    for (u64 i = 0; i < scene->option_count; i++) {
-        
-        printf("[%llu] ", i + 1);
-        
-        String text = scene->options[i].text[language];
-        if (!text.count) text = missing;
-        print(string("@\n"), text);
-    }
-}
-
-void run_story(Story* story) {
-    
-    HashTable*     table       = &story->scene_table;
-    LanguageTable* lang_table  = &story->lang_table;
-    String current_scene_label = story->start_label;
-    String quit_label          = story->quit_label;
-    
-    u64 language = 0; 
-    
-    while (1) {
-        
-        if (string_equal(current_scene_label, quit_label)) break;
-
-        HashTableEntry* entry = table_get_entry(table, current_scene_label);
-        assert(entry != NULL);
-        
-        Scene* scene = &entry->value;
-        print_scene(scene, language);
-        
-        ask_again:
-        printf("> ");
-
-        String line = string_trim_spaces(read_line());
-
-        if (string_equal(line, string("quit"))  || string_equal(line, string("exit")))  break;
-        if (string_equal(line, string("scene")) || string_equal(line, string("print"))) continue;
-        
-        String command = string_eat_by_spaces(&line);
-
-        if (string_equal(command, string("help"))) {
-
-            printf(
-                "=======================\n"
-                "How to use this program:\n"
-                "\n"
-                "    Choose an option:\n"
-                "\n"
-                "    Do it?\n"
-                "    [1] yes\n"
-                "    [2] no\n"
-                "    > 1\n"
-                "    \n"
-                "    Change Language:\n"
-                "    > lang en_us\n"
-                "    \n"
-                "    Print Current Scene:\n"
-                "    > scene\n"
-                "    \n"
-                "    Quit Game:\n"
-                "    > quit\n"
-                "=======================\n"
-            );
-
-            goto ask_again;
-        
-        } else if (string_equal(command, string("language")) || string_equal(command, string("lang"))) {
-
-            String lang = string_trim_spaces(line);
-            if (!line.count) {
-                printf("Available languages:\n");
-                for (u64 i = 0; i < lang_table->count; i++) {
-                    print(string("@\n"), lang_table->data[i]);
-                }
-                goto ask_again;
-            }
-            
-            u64 index;
-            if (!language_table_get_index(lang_table, line, &index)) {
-                
-                print(string("Unknown language \"@\".\n"), line);
-                printf("Available languages:\n");
-                for (u64 i = 0; i < lang_table->count; i++) {
-                    print(string("@\n"), lang_table->data[i]);
-                }
-
-                goto ask_again;
-            }
-            
-            language = index;
-        
-        } else {
-            
-            u64 option_index = 0;
-            if (parse_u64(command, &option_index)) {
-                
-                if (line.count) {
-                    printf("You can only choose 1 option! Type only 1 option number to choose it.\n");
-                    goto ask_again;
-                }
-            
-                if (option_index < 1 || option_index > scene->option_count) {
-                    print(string("There is no option @!\n"), command);
-                    goto ask_again;
-                }
-
-                current_scene_label = scene->options[option_index - 1].link;
-            
-            } else {
-        
-                print(string("Unknown Command \"@\".\nType the option number to choose it. Type \"help\" for more information.\n"), command); // todo: hardcoded
-                goto ask_again; 
-            }
-        }
-    }
 }
 
