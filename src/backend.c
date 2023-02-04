@@ -522,15 +522,7 @@ void run_story(Story* story) {
 
 /* ---- Export ---- */
 
-// for outputting valid C99 identifiers (because a scene label string is in utf-8)
-// todo: maybe this is too long? use compressed base62 or something?
-void file_print_string_as_byte_literal_identifier(FILE* f, String s) {
-    fprintf(f, "identifier_");
-    for (u64 i = 0; i < s.count; i++) {
-        fprintf(f, "%x", s.data[i]);
-    }
-}
-
+// todo: better font and box styles?
 u8 export_story_to_graphviz_dot_file(Story* story, char* file_name) {
     
     FILE* f = fopen(file_name, "wb");
@@ -559,9 +551,21 @@ u8 export_story_to_graphviz_dot_file(Story* story, char* file_name) {
     return 1;
 }
 
+// note: hack
+void file_print_string_as_twee_identifier(FILE* f, String s) {
+    for (u64 i = 0; i < s.count; i++) {
+        u8 c = s.data[i];
+        if (c == '_') {
+            fputc(' ', f);
+        } else {
+            fputc(c, f);
+        }
+    }
+}
+
 // The .twee format for Twine 
-// todo: Twine doesn't like '_' for label identifier
-// todo: figure out start and quit label
+// note: currently we need to set the starting point in Twine manually
+// todo: all the string_equal() with quit label may be slow
 u8 export_story_to_twee(Story* story, u64 language, char* file_name) {
 
     HashTable*     table      = &story->scene_table;
@@ -569,20 +573,28 @@ u8 export_story_to_twee(Story* story, u64 language, char* file_name) {
 
     FILE* f = fopen(file_name, "wb");
     if (!f) return 0;
-    
+
     for (u64 i = 0; i < table->size; i++) {
         
         HashTableEntry* entry = &table->entries[i];
         if (!entry->occupied) continue;
+        if (string_equal(entry->key, story->quit_label)) continue;
         
         Scene* scene = &entry->value;
 
-        file_print(f, string(":: @\n"), entry->key);
-        file_print(f, string("@\n"), scene->text[language]);
+        file_print(f, string(":: "));
+        file_print_string_as_twee_identifier(f, entry->key);
+        file_print(f, string("\n@\n"), scene->text[language]);
         
         for (u64 j = 0; j < scene->option_count; j++) {
+            
             Option* option = &scene->options[j];
-            file_print(f, string("[[@->@]]\n"), option->text[language], option->link);
+
+            if (string_equal(option->link, story->quit_label)) continue;
+            
+            file_print(f, string("[[@->"), option->text[language]); 
+            file_print_string_as_twee_identifier(f, option->link);
+            fprintf(f, "]]\n");
         }
         
         fprintf(f, "\n");
@@ -594,6 +606,16 @@ u8 export_story_to_twee(Story* story, u64 language, char* file_name) {
     return 1;
 }
 
+// for outputting valid C99 identifiers (because a scene label string is in utf-8)
+// todo: maybe this is too long? use compressed base62 or something?
+void file_print_string_as_byte_literal_identifier(FILE* f, String s) {
+    fprintf(f, "identifier_");
+    for (u64 i = 0; i < s.count; i++) {
+        fprintf(f, "%x", s.data[i]);
+    }
+}
+
+// todo: better and more robust interface, localized help command
 u8 export_story_to_c_code(Story* story, char* file_name) {
     
     HashTable*     table      = &story->scene_table;
