@@ -111,6 +111,7 @@ String string_strip_label(String s) {
 }
 
 // todo: make this return error code instead of hard exiting?
+// todo: better error messages
 void parse_file_to_story(char* file_name, Story* story) {
     
 
@@ -467,7 +468,6 @@ void run_story(Story* story) {
         
         } else if (string_equal(command, string("language")) || string_equal(command, string("lang"))) {
 
-            String lang = string_trim_spaces(line);
             if (!line.count) {
                 printf("Available languages:\n");
                 for (u64 i = 0; i < lang_table->count; i++) {
@@ -522,7 +522,6 @@ void run_story(Story* story) {
 
 /* ---- Export ---- */
 
-// todo: better font and box styles?
 u8 export_story_to_graphviz_dot_file(Story* story, char* file_name) {
     
     FILE* f = fopen(file_name, "wb");
@@ -531,6 +530,7 @@ u8 export_story_to_graphviz_dot_file(Story* story, char* file_name) {
     HashTable* table = &story->scene_table;
 
     fprintf(f, "digraph {\n");
+    fprintf(f, "    node [fontname=\"sans-serif\", shape=\"box\"];\n");
     
     for (u64 i = 0; i < table->size; i++) {
         
@@ -568,8 +568,7 @@ void file_print_string_as_twee_identifier(FILE* f, String s) {
 // todo: all the string_equal() with quit label may be slow
 u8 export_story_to_twee(Story* story, u64 language, char* file_name) {
 
-    HashTable*     table      = &story->scene_table;
-    LanguageTable* lang_table = &story->lang_table;
+    HashTable* table = &story->scene_table;
 
     FILE* f = fopen(file_name, "wb");
     if (!f) return 0;

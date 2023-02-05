@@ -1,4 +1,5 @@
 *.exe
 *.story
 *.twee
+*.dot
 bin/*.c
