@@ -27,7 +27,6 @@ jp
 # A story file must have a start label and a quit label.
 # The start label is the scene you will be started at. You need to define it yourself.
 # The quit label is to provide a exit game function as an option in a scene. You don't need to define it yourself, since it's the exit.
-# You can use utf-8 text for label names.
 start: [start]
 quit:  [quit]
 
