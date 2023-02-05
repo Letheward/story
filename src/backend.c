@@ -257,7 +257,7 @@ void parse_file_to_story(char* file_name, Story* story) {
                 hard_error("Invalid label text at line %llu\n", line_count);
             }
             
-            text = string_trim_spaces_from_start(text);
+            text = string_trim_spaces(text);
             
             // is paragraph
             if (!text.count) {
@@ -334,6 +334,11 @@ void parse_file_to_story(char* file_name, Story* story) {
             String num = string_eat_by_separator(&option, string("."));
             if (num.count == line.count) {
                 hard_error("Invalid option at line %llu\n", line_count);
+            } else {
+                u64 _;
+                if (!parse_u64(num, &_)) { 
+                    hard_error("Invalid option at line %llu\n", line_count);
+                }
             }
             
             option = string_trim_spaces(option);
@@ -376,7 +381,7 @@ void parse_file_to_story(char* file_name, Story* story) {
                 if (slot->count) {
                     hard_error("Duplicate language string at line %llu\n", line_count);
                 }
-                   
+
                 *slot = text;
             }
             
