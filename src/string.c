@@ -102,6 +102,11 @@ u8 string_starts_with(String s, String match) {
     return 1;
 }
 
+u8 string_starts_with_u8(String s, u8 c) {
+    if (!s.count) return 0;
+    return s.data[0] == c;
+}
+
 u8 string_ends_with(String s, String match) {
     if (s.count < match.count) return 0;
     u64 pos = s.count - match.count;
@@ -109,6 +114,11 @@ u8 string_ends_with(String s, String match) {
         if (s.data[pos + i] != match.data[i]) return 0;
     }
     return 1;
+}
+
+u8 string_ends_with_u8(String s, u8 c) {
+    if (!s.count) return 0;
+    return s.data[s.count - 1] == c;
 }
 
 // naive search for now

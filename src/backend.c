@@ -155,7 +155,7 @@ void parse_file_to_story(char* file_name, Story* story) {
                 
                 if (!line.count) break;
                
-                if (string_starts_with(line, string("#"))) continue;
+                if (string_starts_with_u8(line, '#')) continue;
                 
                 String language = string_trim_spaces(line);
                 language_table_add(lang_table, language);
@@ -231,7 +231,7 @@ void parse_file_to_story(char* file_name, Story* story) {
         
         String label = string_trim_spaces(line);
         
-        if (string_starts_with(line, string("#"))) continue;
+        if (string_starts_with_u8(line, '#')) continue;
         if (!string_is_label(line)) {
             hard_error("Invalid label at line %llu\n", line_count);
         }
@@ -248,7 +248,7 @@ void parse_file_to_story(char* file_name, Story* story) {
             line_count++;
 
             if (!line.count) break;
-            if (string_starts_with(line, string("#"))) continue;
+            if (string_starts_with_u8(line, '#')) continue;
             
             String text = line;
             String lang = string_eat_by_separator(&text, string(":"));
@@ -328,7 +328,7 @@ void parse_file_to_story(char* file_name, Story* story) {
             line_count++;
 
             if (!line.count) break;
-            if (string_starts_with(line, string("#"))) continue;
+            if (string_starts_with_u8(line, '#')) continue;
 
             String option = line;
             String num = string_eat_by_separator(&option, string("."));
@@ -361,7 +361,7 @@ void parse_file_to_story(char* file_name, Story* story) {
                 line_count++;
                 
                 if (!line.count) break;
-                if (string_starts_with(line, string("#"))) continue;
+                if (string_starts_with_u8(line, '#')) continue;
             
                 String text = line;
                 String lang = string_eat_by_separator(&text, string(":"));
