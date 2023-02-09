@@ -110,6 +110,7 @@ String string_strip_label(String s) {
     return string_view(s, 1, s.count - 1);
 }
 
+// todo: cleanup
 // todo: make this return error code instead of hard exiting?
 // todo: better error messages
 void parse_file_to_story(char* file_name, Story* story) {
@@ -118,7 +119,7 @@ void parse_file_to_story(char* file_name, Story* story) {
     /* ---- Load file and init hash table ---- */ 
     
     String file = load_file(file_name);
-    if (!file.count) hard_error("Cannot open file \"%s\"\n", file_name);
+    if (!file.count) hard_error("Cannot open file \"%s\".\n", file_name);
     
     story->scene_table = table_init(256, 0.7, get_hash_fnv1a);
 
@@ -133,6 +134,8 @@ void parse_file_to_story(char* file_name, Story* story) {
 
 
     /* ---- Header ---- */ 
+
+    // todo: report error if there is other stuff before the header
 
     u8 has_language = 0;    
     u8 has_start    = 0;
@@ -168,7 +171,7 @@ void parse_file_to_story(char* file_name, Story* story) {
             
             String label = string_trim_spaces(string_advance(line, start.count));
             if (!string_is_label(label)) {
-                hard_error("Invalid start label at %llu\n", line_count);
+                hard_error("Invalid start label at line %llu.\n", line_count);
             }
 
             story->start_label = string_strip_label(label);
@@ -180,7 +183,7 @@ void parse_file_to_story(char* file_name, Story* story) {
             
             String label = string_trim_spaces(string_advance(line, quit.count));
             if (!string_is_label(label)) {
-                hard_error("Invalid quit label at %llu\n", line_count);
+                hard_error("Invalid quit label at line %llu.\n", line_count);
             }
 
             label = string_strip_label(label);
@@ -202,6 +205,9 @@ void parse_file_to_story(char* file_name, Story* story) {
 
     /* ---- first pass to put all labels into the hash table ---- */
     
+    // todo: because we don't report error here when a label is invalid, this makes error messages not that good 
+    // (rely on later hash table look up error, which won't tell the location of invalid label)
+    
     for (String t = file; t.count;) {
 
         String line = string_eat_line(&t);
@@ -214,7 +220,8 @@ void parse_file_to_story(char* file_name, Story* story) {
     }
 
     if (!table_get_entry(table, story->start_label)) {
-        hard_error("File \"%s\" does not contain the correct start label specified in the header.\n", file_name);
+        print(string("Error: File \"@\" does not contain the correct start label [@] specified in the header.\n"), c_string_to_string(file_name), story->start_label);
+        exit(1);
     }
 
 
@@ -232,8 +239,10 @@ void parse_file_to_story(char* file_name, Story* story) {
         String label = string_trim_spaces(line);
         
         if (string_starts_with_u8(line, '#')) continue;
-        if (!string_is_label(line)) {
-            hard_error("Invalid label at line %llu\n", line_count);
+
+        // this doesn't work, see comments for the first pass
+        if (!string_is_label(label)) {
+            hard_error("Invalid label at line %llu.\n", line_count);
         }
 
         HashTableEntry* entry = table_get_entry(table, string_strip_label(label));
@@ -254,10 +263,12 @@ void parse_file_to_story(char* file_name, Story* story) {
             String lang = string_eat_by_separator(&text, string(":"));
 
             if (lang.count == line.count) {
-                hard_error("Invalid label text at line %llu\n", line_count);
+                hard_error("Invalid label text at line %llu.\n", line_count);
             }
             
             text = string_trim_spaces(text);
+            
+            u64 old_line_count = line_count;
             
             // is paragraph
             if (!text.count) {
@@ -271,7 +282,6 @@ void parse_file_to_story(char* file_name, Story* story) {
                 String start = {0};
                 String end   = {0};
 
-                u64 old_line_count = line_count;
                 
                 while (walk.count) {
                     
@@ -300,7 +310,7 @@ void parse_file_to_story(char* file_name, Story* story) {
                 }
                 
                 if (!paragraph_has_start || !paragraph_has_end) {
-                    hard_error("Invalid paragraph at line %llu\n", old_line_count);
+                    hard_error("Invalid paragraph at line %llu.\n", old_line_count);
                 }
 
                 String range = { start.data, end.data - start.data };
@@ -315,12 +325,16 @@ void parse_file_to_story(char* file_name, Story* story) {
 
             u64 index;
             if (!language_table_get_index(lang_table, lang, &index)) {
-                hard_error("Invalid language at line %llu\n", line_count);
+                print(string("Error: Cannot find language \"@\" in language list, "), lang);
+                printf("at line %llu.\n", old_line_count);
+                exit(1);
             }
             
             String* slot = &scene->text[index];
             if (slot->count) {
-                hard_error("Duplicate language string at line %llu\n", line_count);
+                print(string("Error: Redundant text for language \"@\", "), lang);
+                printf("at line %llu.\n", old_line_count);
+                exit(1);
             }
                
             *slot = text;
@@ -340,23 +354,25 @@ void parse_file_to_story(char* file_name, Story* story) {
             String option = line;
             String num = string_eat_by_separator(&option, string("."));
             if (num.count == line.count) {
-                hard_error("Invalid option at line %llu\n", line_count);
+                hard_error("Invalid option at line %llu.\n", line_count);
             } else {
                 u64 _;
                 if (!parse_u64(num, &_)) { 
-                    hard_error("Invalid option at line %llu\n", line_count);
+                    hard_error("Invalid option at line %llu.\n", line_count);
                 }
             }
             
             option = string_trim_spaces(option);
             if (!string_is_label(option)) {
-                hard_error("Invalid option label at line %llu\n", line_count);
+                hard_error("Invalid option label at line %llu.\n", line_count);
             }
 
             option = string_strip_label(option);
     
             if (!table_get_entry(table, option)) {
-                hard_error("Cannot find option label at line %llu\n", line_count);
+                print(string("Error: Cannot find option label [@] in the whole file, "), option);
+                printf("at line %llu.\n", line_count);
+                exit(1);
             }
             
             scene->options[option_acc].link = option;
@@ -374,19 +390,23 @@ void parse_file_to_story(char* file_name, Story* story) {
                 String lang = string_eat_by_separator(&text, string(":"));
 
                 if (lang.count == line.count) {
-                    hard_error("Invalid option text at line %llu\n", line_count);
+                    hard_error("Invalid option text at line %llu.\n", line_count);
                 } 
                 
                 text = string_trim_spaces(text);
                 
                 u64 index;
                 if (!language_table_get_index(lang_table, lang, &index)) {
-                    hard_error("Invalid language at line %llu\n", line_count);
+                    print(string("Error: Cannot find language \"@\" in language list, "), lang);
+                    printf("at line %llu.\n", line_count);
+                    exit(1);
                 }
                 
                 String* slot = &scene->options[option_acc].text[index];
                 if (slot->count) {
-                    hard_error("Duplicate language string at line %llu\n", line_count);
+                    print(string("Error: Redundant text for language \"@\", "), lang);
+                    printf("at line %llu.\n", line_count);
+                    exit(1);
                 }
 
                 *slot = text;
