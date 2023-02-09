@@ -302,8 +302,15 @@ void parse_file_to_story(char* file_name, Story* story) {
                 if (!paragraph_has_start || !paragraph_has_end) {
                     hard_error("Invalid paragraph at line %llu\n", old_line_count);
                 }
+
+                String range = { start.data, end.data - start.data };
+                string_eat_line(&range);
                 
-                text = string_trim_spaces(string_advance((String) { start.data, end.data - start.data }, delimiter.count)); // todo: make this better
+                // hack: these are to deal with print_scene() always print a new line
+                if (string_ends_with_u8(range, '\n')) range.count--;
+                if (string_ends_with_u8(range, '\r')) range.count--;
+                
+                text = range;
             }
 
             u64 index;
