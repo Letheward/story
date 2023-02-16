@@ -73,7 +73,7 @@ u8 string_contains_u8(String s, u8 c) {
 // todo: validate
 u8 string_contains_any_u8(String a, String b) {
     for (u64 i = 0; i < a.count; i++) {
-        for (u64 j = 0; j < b.count; i++) {
+        for (u64 j = 0; j < b.count; j++) {
             if (a.data[i] == b.data[j]) return 1; 
         }
     }
