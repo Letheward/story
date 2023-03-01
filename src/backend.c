@@ -135,8 +135,6 @@ void parse_file_to_story(char* file_name, Story* story) {
 
     /* ---- Header ---- */ 
 
-    // todo: report error if there is other stuff before the header
-
     u8 has_language = 0;    
     u8 has_start    = 0;
     u8 has_quit     = 0;
@@ -148,6 +146,9 @@ void parse_file_to_story(char* file_name, Story* story) {
         
         const String start = string("start:");
         const String quit  = string("quit:");
+        
+        if (!line.count) continue;
+        if (string_starts_with_u8(line, '#')) continue;
         
         if (string_starts_with(line, string("languages:"))) {
 
@@ -165,9 +166,8 @@ void parse_file_to_story(char* file_name, Story* story) {
             }
 
             has_language = 1;
-        }
-
-        if (string_starts_with(line, start)) { 
+        
+        } else if (string_starts_with(line, start)) { 
             
             String label = string_trim_spaces(string_advance(line, start.count));
             if (!string_is_label(label)) {
@@ -177,9 +177,8 @@ void parse_file_to_story(char* file_name, Story* story) {
             story->start_label = string_strip_label(label);
 
             has_start = 1;
-        }
-    
-        if (string_starts_with(line, quit)) {
+        
+        } else if (string_starts_with(line, quit)) {
             
             String label = string_trim_spaces(string_advance(line, quit.count));
             if (!string_is_label(label)) {
@@ -192,6 +191,10 @@ void parse_file_to_story(char* file_name, Story* story) {
             
             table_put(table, label, (Scene) {0}); // todo: this waste a slot
             has_quit = 1;
+        
+        } else {
+        
+            hard_error("Invalid content at line %llu. A Story file must starts with a correct header!\n", line_count);
         }
         
         if (has_language && has_start && has_quit) break;
@@ -201,12 +204,12 @@ void parse_file_to_story(char* file_name, Story* story) {
     if (!has_start)    hard_error("File \"%s\" does not contain a start label!\n", file_name);
     if (!has_quit)     hard_error("File \"%s\" does not contain a quit label!\n", file_name);
 
-
+    
 
     /* ---- first pass to put all labels into the hash table ---- */
     
     // todo: because we don't report error here when a label is invalid, this makes error messages not that good 
-    // (rely on later hash table look up error, which won't tell the location of invalid label)
+    // (rely on later hash table look up error, which won't tell the location of the invalid label)
     
     for (String t = file; t.count;) {
 
